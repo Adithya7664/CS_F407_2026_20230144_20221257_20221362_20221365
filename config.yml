@@ -1,0 +1,59 @@
+name: CS_F407_2026_20230144_20221257_20221362_20221365 # rename to your group ID e.g. CSF407_2025_ID1
+
+channels:
+  - pytorch
+  - nvidia
+  - conda-forge
+  - defaults
+
+dependencies:
+  # ── Python ──────────────────────────────────────────────────────────────────
+  - python=3.10
+
+  # ── PyTorch (CUDA 11.8 build; swap cu118→cpu if no GPU locally) ─────────────
+  - pytorch::pytorch=2.1.2
+  - pytorch::torchvision=0.16.2
+  - pytorch::torchaudio=2.1.2
+  - pytorch::pytorch-cuda=11.8          # remove this line for CPU-only env
+
+  # ── Core scientific stack ────────────────────────────────────────────────────
+  - numpy=1.26.4
+  - scipy=1.12.0
+  - pandas=2.2.1
+
+  # ── Image processing ─────────────────────────────────────────────────────────
+  - pillow=10.3.0
+  - opencv=4.9.0               # cv2: Sobel gradients, bounding-box drawing, resize
+  - scikit-image=0.22.0        # additional image utilities
+
+  # ── Visualisation ─────────────────────────────────────────────────────────────
+  - matplotlib=3.8.4
+  - seaborn=0.13.2
+
+  # ── Depth estimation (MiDaS loaded via torch.hub) ────────────────────────────
+  - timm=0.9.16                # required by MiDaS_small when loaded via torch.hub
+
+  # ── Knowledge graph / graph utilities ────────────────────────────────────────
+  - networkx=3.3               # optional but useful for graph visualisation/debug
+
+  # ── Configuration & serialisation ────────────────────────────────────────────
+  - pyyaml=6.0.1
+  - jsonschema=4.22.0
+
+  # ── Training utilities ────────────────────────────────────────────────────────
+  - tqdm=4.66.4                # progress bars for training loop
+  - tensorboard=2.16.2         # optional: loss/metric logging during training
+
+  # ── Notebook support (Kaggle / Colab parity) ─────────────────────────────────
+  - jupyter=1.0.0
+  - ipykernel=6.29.4
+  - ipywidgets=8.1.2
+
+  # ── Conda-forge extras ───────────────────────────────────────────────────────
+  - conda-forge::albumentations=1.4.4   # augmentation pipeline for training
+
+  # ── pip-only packages ─────────────────────────────────────────────────────────
+  - pip
+  - pip:
+      - torchmetrics==1.3.2             # mIoU and pixel-accuracy metrics
+      - segmentation-models-pytorch==0.3.3   # reference architectures (optional)
