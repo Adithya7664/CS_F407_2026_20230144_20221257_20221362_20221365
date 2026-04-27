@@ -1,0 +1,10 @@
+{
+    "mission_id": "OP-DELTA-9",
+    "package": {
+        "type": "medical_vials",
+        "heavy": true,
+        "fragile": false,
+        "valuable": false,
+        "biohazard": false
+    }
+}
