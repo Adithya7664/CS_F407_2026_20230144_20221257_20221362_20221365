@@ -50,7 +50,7 @@ dependencies:
   - ipywidgets=8.1.2
 
   # ── Conda-forge extras ───────────────────────────────────────────────────────
-  - conda-forge::albumentations=1.4.4   # augmentation pipeline for training
+  #- conda-forge::albumentations=1.4.4   # augmentation pipeline for training
 
   # ── pip-only packages ─────────────────────────────────────────────────────────
   - pip
