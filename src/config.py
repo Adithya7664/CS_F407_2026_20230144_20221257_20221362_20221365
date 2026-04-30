@@ -15,13 +15,13 @@ ANN_H = 256
 NUM_EPOCHS      = 50
 BATCH_SIZE      = 8
 LEARNING_RATE   = 1e-3
-NUM_WORKERS     = 4
+NUM_WORKERS     = 0
 VAL_SPLIT       = 0.2          # fraction of training data used for validation
  
 # ── Dataset paths (update to your local paths) ───────────────────────────────
-DATASET_ROOT        = "data/semantic_drone_dataset"
-TRAIN_IMAGE_DIR     = f"{DATASET_ROOT}/training_set/images"
-TRAIN_MASK_DIR      = f"{DATASET_ROOT}/training_set/gt/semantic/label_images"
+DATASET_ROOT        = "training_set"
+TRAIN_IMAGE_DIR     = f"{DATASET_ROOT}/images"
+TRAIN_MASK_DIR      = f"{DATASET_ROOT}/semantic/s/label_images"
 CHECKPOINT_PATH     = "best_model.pth"
  
 # ── Number of segmentation classes ───────────────────────────────────────────
@@ -43,10 +43,10 @@ CLASS_TO_TERRAIN = {
 # Source: TU Graz Semantic Drone Dataset label definition
 CLASS_NAMES = [
     "unlabeled",    # 0
-    "paved-area",   # 1  ← SAFE
-    "dirt",         # 2  ← SAFE
-    "grass",        # 3  ← SAFE
-    "gravel",       # 4  ← SAFE
+    "paved-area",   # 1  <- SAFE (Pavement)
+    "dirt",         # 2  <- SAFE (Dirt)
+    "grass",        # 3  <- SAFE (Grass)
+    "gravel",       # 4  <- SAFE (Dirt category)
     "water",        # 5
     "rocks",        # 6
     "pool",         # 7
@@ -65,34 +65,36 @@ CLASS_NAMES = [
     "bald-tree",    # 20
     "ar-marker",    # 21
     "obstacle",     # 22
+    "conflicting",  # 23
 ]
  
 # ── RGB colour palette for each class (for mask visualisation) ────────────────
 # Each entry: (R, G, B)  — matches the dataset's RGB annotation scheme
 CLASS_COLORS = [
-    (0,   0,   0),      # 0  unlabeled        — black
-    (128, 64,  128),    # 1  paved-area        — purple
-    (130, 76,  0),      # 2  rocks             — brown
-    (0,   102, 0),      # 3  low-vegetation    — dark green
-    (112, 103, 87),     # 4  high-vegetation   — olive
-    (28,  42,  168),    # 5  building          — blue
-    (48,  41,  30),     # 6  wall              — dark brown
-    (0,   50,  89),     # 7  obstacle          — dark teal
-    (107, 142, 35),     # 8  water             — yellow-green
-    (70,  70,  70),     # 9  person            — grey
-    (102, 102, 156),    # 10 dog               — slate
-    (190, 153, 153),    # 11 car               — pink
-    (9,   143, 150),    # 12 bicycle           — cyan
-    (119, 11,  32),     # 13 tree              — dark red
-    (0,   0,   142),    # 14 bald-tree         — navy
-    (0,   0,   90),     # 15 ar-marker         — deep blue
-    (0,   0,   230),    # 16 obstacle-2        — bright blue
-    (119, 11,  32),     # 17 conflicting       — dark red
-    (0,   60,  100),    # 18 dirt              — dark teal
-    (0,   0,   142),    # 19 gravel            — navy
-    (0,   80,  100),    # 20 grass             — teal
-    (128, 64,  255),    # 21 fence             — violet
-    (0,   0,   192),    # 22 roof              — medium blue
+    (0,   0,   0),      # 0  unlabeled
+    (128, 64,  128),    # 1  paved-area    <- SAFE
+    (130, 76,  0),      # 2  dirt          <- SAFE
+    (0,   102, 0),      # 3  grass         <- SAFE
+    (112, 103, 87),     # 4  gravel        <- SAFE
+    (28,  42,  168),    # 5  water
+    (48,  41,  30),     # 6  rocks
+    (0,   50,  89),     # 7  pool
+    (107, 142, 35),     # 8  vegetation
+    (70,  70,  70),     # 9  roof
+    (102, 102, 156),    # 10 wall
+    (254, 228, 12),     # 11 window
+    (254, 148, 12),     # 12 door
+    (190, 153, 153),    # 13 fence
+    (153, 153, 153),    # 14 fence-pole
+    (255, 22,  96),     # 15 person
+    (102, 51,  0),      # 16 dog
+    (9,   143, 150),    # 17 car
+    (119, 11,  32),     # 18 bicycle
+    (51,  51,  0),      # 19 tree
+    (190, 250, 190),    # 20 bald-tree
+    (112, 150, 146),    # 21 ar-marker
+    (2,   135, 115),    # 22 obstacle
+    (255, 0,   0),      # 23 conflicting
 ]
  
 # ── Cost function weights ─────────────────────────────────────────────────────

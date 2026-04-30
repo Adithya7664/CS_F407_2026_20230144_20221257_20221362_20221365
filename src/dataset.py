@@ -1,7 +1,8 @@
 import os
 import numpy as np
 from PIL import Image
-
+from PIL import ImageFile
+ImageFile.LOAD_TRUNCATED_IMAGES = True
 import torch
 from torch.utils.data import Dataset, DataLoader, random_split
 from torchvision import transforms
@@ -82,7 +83,7 @@ class GrazDataset(Dataset):
                 f"No images found in '{image_dir}'. "
                 "Check TRAIN_IMAGE_DIR in config.py."
             )
-    def __len(self)->int:
+    def __len__(self):
         return len(self.filenames)
     
     def __getitem__(self, index:int):
@@ -118,7 +119,7 @@ class GrazDataset(Dataset):
         return image_tensor, mask_tensor, main_tensor, fname
     
     #helpers
-    def _find_mask(self, stem: str) -> str:
+    def _find_mask(self, stem: str):
         """Locate the annotation mask file for the given image stem."""
         for ext in (".png", ".jpg", ".jpeg", ".PNG", ".JPG"):
             candidate = os.path.join(self.mask_dir, stem + ext)

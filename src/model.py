@@ -99,7 +99,7 @@ class SegNet(nn.Module):
         #output head
         self.output_conv=nn.Conv2d(in_channels=64, out_channels=num_classes, kernel_size=1)
         #weights initializsation
-        self.__init___weights()
+        self._init_weights()
         
     def forward(self, x:torch.Tensor) -> torch.Tensor:
         """
