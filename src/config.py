@@ -20,8 +20,8 @@ VAL_SPLIT       = 0.2          # fraction of training data used for validation
  
 # ── Dataset paths (update to your local paths) ───────────────────────────────
 DATASET_ROOT        = "data/semantic_drone_dataset"
-TRAIN_IMAGE_DIR     = f"{DATASET_ROOT}/original_images"
-TRAIN_MASK_DIR      = f"{DATASET_ROOT}/RGB_color_image_masks"
+TRAIN_IMAGE_DIR     = f"{DATASET_ROOT}/training_set/images"
+TRAIN_MASK_DIR      = f"{DATASET_ROOT}/training_set/gt/semantic/label_images"
 CHECKPOINT_PATH     = "best_model.pth"
  
 # ── Number of segmentation classes ───────────────────────────────────────────
@@ -29,41 +29,42 @@ NUM_CLASSES = 23          # class IDs 0 – 22
  
 # ── Safe landing class IDs (used to build binary safe mask) ──────────────────
 # 1 = paved area  |  3 = low vegetation / grass  |  4 = dirt / gravel
-SAFE_CLASSES = [1, 3, 4]
+SAFE_CLASSES = [1, 2, 3, 4]
  
 # ── Class ID → terrain type mapping (for knowledge graph lookup) ──────────────
 CLASS_TO_TERRAIN = {
-    1: "Pavement",
-    3: "Grass",
-    4: "Dirt",
+    1: "Pavement",   # paved-area
+    2: "Dirt",       # dirt
+    3: "Grass",      # grass
+    4: "Dirt",       # gravel → treat same as Dirt
 }
  
 # ── 23-class label names (index = class ID) ───────────────────────────────────
 # Source: TU Graz Semantic Drone Dataset label definition
 CLASS_NAMES = [
-    "unlabeled",          # 0
-    "paved-area",         # 1  ← SAFE
-    "rocks",              # 2
-    "low-vegetation",     # 3  ← SAFE (grass)
-    "high-vegetation",    # 4  ← SAFE (dirt/gravel — dataset uses index 4)
-    "building",           # 5  (NOTE: verify exact ordering against dataset README)
-    "wall",               # 6
-    "obstacle",           # 7
-    "water",              # 8
-    "person",             # 9
-    "dog",                # 10
-    "car",                # 11
-    "bicycle",            # 12
-    "tree",               # 13
-    "bald-tree",          # 14
-    "ar-marker",          # 15
-    "obstacle-2",         # 16
-    "conflicting",        # 17
-    "dirt",               # 18
-    "gravel",             # 19
-    "grass",              # 20
-    "fence",              # 21
-    "roof",               # 22
+    "unlabeled",    # 0
+    "paved-area",   # 1  ← SAFE
+    "dirt",         # 2  ← SAFE
+    "grass",        # 3  ← SAFE
+    "gravel",       # 4  ← SAFE
+    "water",        # 5
+    "rocks",        # 6
+    "pool",         # 7
+    "vegetation",   # 8
+    "roof",         # 9
+    "wall",         # 10
+    "window",       # 11
+    "door",         # 12
+    "fence",        # 13
+    "fence-pole",   # 14
+    "person",       # 15
+    "dog",          # 16
+    "car",          # 17
+    "bicycle",      # 18
+    "tree",         # 19
+    "bald-tree",    # 20
+    "ar-marker",    # 21
+    "obstacle",     # 22
 ]
  
 # ── RGB colour palette for each class (for mask visualisation) ────────────────
