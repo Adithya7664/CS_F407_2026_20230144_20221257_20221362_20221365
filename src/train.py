@@ -64,7 +64,7 @@ def run_epoch(model:nn.Module, loader, criterion:nn.Module, optimizer:torch.opti
     total_loss = 0.0
     total_acc = 0.0
     total_iou = 0.0
-    num_batches = 0
+    n_batches = 0
     desc = "  Train" if training else "  Val  "
     context = torch.enable_grad if training else torch.no_grad
     with context():
