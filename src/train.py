@@ -119,6 +119,8 @@ def train(num_epochs:int = config.NUM_EPOCHS, batch_size:int= config.BATCH_SIZE,
     print(f"{'='*60}\n")
     #data
     train_loader, val_loader = get_dataloaders(
+        image_dir=config.TRAIN_IMAGE_DIR, 
+        mask_dir=config.TRAIN_MASK_DIR, 
         batch_size=batch_size,
         num_workers=config.NUM_WORKERS,
     )

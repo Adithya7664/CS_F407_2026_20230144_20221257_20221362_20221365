@@ -19,9 +19,9 @@ NUM_WORKERS     = 0
 VAL_SPLIT       = 0.2          # fraction of training data used for validation
  
 # ── Dataset paths (update to your local paths) ───────────────────────────────
-DATASET_ROOT        = "training_set"
-TRAIN_IMAGE_DIR     = f"{DATASET_ROOT}/images"
-TRAIN_MASK_DIR      = f"{DATASET_ROOT}/semantic/s/label_images"
+DATASET_ROOT    = "/kaggle/input/datasets/meduriadithya/tu-graz-semantic-drone-dataset/semantic_drone_dataset/training_set"
+TRAIN_IMAGE_DIR = f"{DATASET_ROOT}/images"
+TRAIN_MASK_DIR  = f"{DATASET_ROOT}/gt/semantic/label_images"
 CHECKPOINT_PATH     = "best_model.pth"
  
 # ── Number of segmentation classes ───────────────────────────────────────────
