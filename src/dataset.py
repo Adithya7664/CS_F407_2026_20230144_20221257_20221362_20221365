@@ -18,26 +18,13 @@ def _build_rgb_to_id_map():
     return {rgb: idx for idx, rgb in enumerate(config.CLASS_COLORS)}
 
 RGB_TO_ID = _build_rgb_to_id_map()
-def rgb_mask_to_class_ids(rgb_mask: np.ndarray)->np.ndarray:
-    """
-    Convert an HxWx3 uint8 RGB annotation mask to an HxW int64 class-ID map.
- 
-    Each pixel's (R,G,B) triplet is looked up in the palette.
-    Unknown colours map to class 0 (unlabeled).
- 
-    Parameters
-    rgb_mask : np.ndarray  shape (H, W, 3), dtype uint8
-    Returns
-    class_map : np.ndarray  shape (H, W), dtype int64
-    """
-    H, W, _ = rgb_mask.shape
-    #Flatten to (H*W, 3) for vectorised lookup
-    
-    flat = rgb_mask.reshape(-1, 3)
-    class_flat = np.zeros(H * W, dtype=np.int64)
-    for i, pixel in enumerate(flat):
-        class_flat[i] = RGB_TO_ID.get(tuple(pixel), 0)
-    return class_flat.reshape(H, W)
+# Build once at module level
+_LUT = np.zeros((256, 256, 256), dtype=np.int64)
+for _idx, (_r, _g, _b) in enumerate(config.CLASS_COLORS):
+    _LUT[_r, _g, _b] = _idx
+
+def rgb_mask_to_class_ids(rgb_mask: np.ndarray) -> np.ndarray:
+    return _LUT[rgb_mask[:,:,0], rgb_mask[:,:,1], rgb_mask[:,:,2]]
 
 #image transforms
 
