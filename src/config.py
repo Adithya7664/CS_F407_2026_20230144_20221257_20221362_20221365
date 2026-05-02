@@ -21,7 +21,7 @@ ANN_H = 256
  
 # ── Training hyper-parameters ─────────────────────────────────────────────────
 NUM_EPOCHS      = 50
-BATCH_SIZE      = 8
+BATCH_SIZE      = 2
 LEARNING_RATE   = 1e-3
 NUM_WORKERS     = 0
 VAL_SPLIT       = 0.2          # fraction of training data used for validation
