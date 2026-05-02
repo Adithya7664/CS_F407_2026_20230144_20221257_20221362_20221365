@@ -130,7 +130,8 @@ def train(num_epochs:int = config.NUM_EPOCHS, batch_size:int= config.BATCH_SIZE,
     #Loss, optimizer, scheuler
     # ignore_index=-1 allows masking unknown pixels if needed
     criterion  = nn.CrossEntropyLoss(ignore_index=-1)
-    optimiser  = Adam(model.parameters(), lr=lr, momentum=0.9, weight_decay=1e-4)
+    from torch.optim import SGD
+    optimiser = SGD(model.parameters(), lr=lr, momentum=0.9, weight_decay=1e-4)
     scheduler  = CosineAnnealingLR(optimiser, T_max=num_epochs, eta_min=1e-6)
     #TensorBoard
     writer = None
