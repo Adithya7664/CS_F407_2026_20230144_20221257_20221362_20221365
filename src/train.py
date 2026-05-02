@@ -127,6 +127,8 @@ def train(num_epochs:int = config.NUM_EPOCHS, batch_size:int= config.BATCH_SIZE,
     #Model
     model = SegNet(num_classes=config.NUM_CLASSES).to(device)
     print(f"  Trainable params : {count_parameters(model):,}\n")
+    print(f"Model device: {next(model.parameters()).device}")
+    torch.backends.cudnn.benchmark = True
     #Loss, optimizer, scheuler
     # ignore_index=-1 allows masking unknown pixels if needed
     criterion  = nn.CrossEntropyLoss(ignore_index=-1)
