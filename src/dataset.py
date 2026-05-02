@@ -150,7 +150,7 @@ def get_dataloaders(image_dir: str=config.TRAIN_IMAGE_DIR, mask_dir: str=config.
         batch_size=batch_size,
         shuffle=True,
         num_workers=num_workers,
-        pin_memory=True,
+        pin_memory=False,
         drop_last=True,
     )
 
@@ -159,7 +159,7 @@ def get_dataloaders(image_dir: str=config.TRAIN_IMAGE_DIR, mask_dir: str=config.
         batch_size=batch_size,
         shuffle=False,
         num_workers=num_workers,
-        pin_memory=True,
+        pin_memory=False,
     )
 
     print(f"[dataset] Total samples : {total}")
