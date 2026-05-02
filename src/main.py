@@ -12,8 +12,9 @@
 #   8. Semantic graph  : mission_config.json → active nodes → penalties
 #   9. Cost ranking    : distance + roughness + semantic → sort candidates
 #  10. Render output   : output.jpg  +  output_analysis.jpg
-
 import os
+os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
+
 import sys
 import argparse
 
