@@ -1,7 +1,15 @@
 import random
 import torch
 
-DEVICE =torch.device("cuda" if torch.cuda.is_available else "cpu")
+try:
+    import torch_directml
+    DEVICE = torch_directml.device()
+    print("Using DirectML GPU")
+except ImportError:
+    try:
+        DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    except AssertionError:
+        DEVICE = torch.device("cpu")
 # ── Image dimensions ──────────────────────────────────────────────────────────
 # Raw images are resized to this before ANY processing (geometry anchor size)
 MAIN_W = 800
@@ -19,9 +27,11 @@ NUM_WORKERS     = 0
 VAL_SPLIT       = 0.2          # fraction of training data used for validation
  
 # ── Dataset paths (update to your local paths) ───────────────────────────────
-DATASET_ROOT    = "/kaggle/input/datasets/meduriadithya/tu-graz-semantic-drone-dataset/semantic_drone_dataset/training_set"
-TRAIN_IMAGE_DIR = f"{DATASET_ROOT}/images"
-TRAIN_MASK_DIR  = f"{DATASET_ROOT}/gt/semantic/label_images"
+import os
+_SRC_DIR = os.path.dirname(os.path.abspath(__file__))
+DATASET_ROOT    = os.path.join(_SRC_DIR, "training_set")
+TRAIN_IMAGE_DIR = os.path.join(_SRC_DIR, "training_set", "images")
+TRAIN_MASK_DIR  = os.path.join(_SRC_DIR, "training_set", "gt", "semantic", "label_images")
 CHECKPOINT_PATH     = "best_model.pth"
  
 # ── Number of segmentation classes ───────────────────────────────────────────

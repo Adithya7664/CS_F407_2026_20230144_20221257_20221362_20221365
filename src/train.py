@@ -130,7 +130,7 @@ def train(num_epochs:int = config.NUM_EPOCHS, batch_size:int= config.BATCH_SIZE,
     #Loss, optimizer, scheuler
     # ignore_index=-1 allows masking unknown pixels if needed
     criterion  = nn.CrossEntropyLoss(ignore_index=-1)
-    optimiser  = Adam(model.parameters(), lr=lr, weight_decay=1e-4)
+    optimiser  = Adam(model.parameters(), lr=lr, momentum=0.9, weight_decay=1e-4)
     scheduler  = CosineAnnealingLR(optimiser, T_max=num_epochs, eta_min=1e-6)
     #TensorBoard
     writer = None
@@ -237,7 +237,7 @@ def load_model(checkpoint: str = config.CHECKPOINT_PATH,
     model = SegNet(num_classes=ckpt.get("num_classes", config.NUM_CLASSES))
     model.load_state_dict(ckpt["model_state"])
     model.to(device).eval()
- 
+    torch.backends.cudnn.benchmark = True
     print(f"[train] Loaded checkpoint from epoch {ckpt.get('epoch', '?')}  "
           f"(val loss: {ckpt.get('best_val_loss', float('nan')):.4f})")
     return model
