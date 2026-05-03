@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torchvision import models
 import config
 
 #building block
@@ -61,73 +62,58 @@ class DecoderBlock(nn.Module):
 # main model
 
 class SegNet(nn.Module):
-    """
-    U-Net with exactly 4 encoder layers and 4 decoder layers.
- 
-    Encoder channel progression : 3 → 64 → 128 → 256 → 512
-    Bottleneck                  :          512 → 1024
-    Decoder channel progression : 1024 → 512 → 256 → 128 → 64
-    Output head                 : 64  → NUM_CLASSES (23)
- 
-    Spatial sizes at each stage (256×256 input):
-        enc1 skip : 256×256,  down : 128×128
-        enc2 skip : 128×128,  down :  64×64
-        enc3 skip :  64×64,   down :  32×32
-        enc4 skip :  32×32,   down :  16×16
-        bottleneck:  16×16
-        dec1 out  :  32×32
-        dec2 out  :  64×64
-        dec3 out  : 128×128
-        dec4 out  : 256×256
-    """
-    def __init__(self, num_classes: int = config.NUM_CLASSES):
+    def __init__(self, num_classes=config.NUM_CLASSES):
         super().__init__()
-        # 4 encoder stages
-        self.enc1 = EncoderBlock(in_ch=3,   out_ch=64)    # layer 1
-        self.enc2 = EncoderBlock(in_ch=64,  out_ch=128)   # layer 2
-        self.enc3 = EncoderBlock(in_ch=128, out_ch=256)   # layer 3
-        self.enc4 = EncoderBlock(in_ch=256, out_ch=512)   # layer 4
-        #Bottleneck (bridges encoder ↔ decoder, not counted as a layer)
-        self.bottleneck = DoubleConv(in_ch=512, out_ch=1024)
-        #4 decoder layers
-        # in_ch = bottleneck/previous decoder out_ch
-        # skip_ch = matching encoder out_ch
-        self.dec1 = DecoderBlock(in_ch=1024, skip_ch=512, out_ch=512)   # layer 1
-        self.dec2 = DecoderBlock(in_ch=512,  skip_ch=256, out_ch=256)   # layer 2
-        self.dec3 = DecoderBlock(in_ch=256,  skip_ch=128, out_ch=128)   # layer 3
-        self.dec4 = DecoderBlock(in_ch=128,  skip_ch=64,  out_ch=64)    # layer 4
-        #output head
-        self.output_conv=nn.Conv2d(in_channels=64, out_channels=num_classes, kernel_size=1)
-        #weights initializsation
-        self._init_weights()
         
-    def forward(self, x:torch.Tensor) -> torch.Tensor:
-        """
-        Parameters
-        ----------
-        x : (B, 3, 256, 256)
- 
-        Returns
-        -------
-        logits : (B, NUM_CLASSES, 256, 256)
-        """
+        # Pretrained ResNet18 encoder — loads ImageNet weights automatically
+        resnet = models.resnet18(weights=models.ResNet18_Weights.DEFAULT)
+        
+        # Encoder layers from ResNet18
+        self.enc1 = nn.Sequential(resnet.conv1, resnet.bn1, resnet.relu)  # 64ch
+        self.pool  = resnet.maxpool
+        self.enc2  = resnet.layer1   # 64ch  — encoder layer 2
+        self.enc3  = resnet.layer2   # 128ch — encoder layer 3
+        self.enc4  = resnet.layer3   # 256ch — encoder layer 4
+
+        # Decoder layers
+        self.dec1 = nn.Sequential(
+            nn.ConvTranspose2d(256, 128, kernel_size=2, stride=2),
+            nn.BatchNorm2d(128), nn.ReLU(inplace=True)
+        )   # decoder layer 1
+        self.dec2 = nn.Sequential(
+            nn.ConvTranspose2d(256, 64, kernel_size=2, stride=2),
+            nn.BatchNorm2d(64), nn.ReLU(inplace=True)
+        )   # decoder layer 2
+        self.dec3 = nn.Sequential(
+            nn.ConvTranspose2d(128, 64, kernel_size=2, stride=2),
+            nn.BatchNorm2d(64), nn.ReLU(inplace=True)
+        )   # decoder layer 3
+        self.dec4 = nn.Sequential(
+            nn.ConvTranspose2d(64, 32, kernel_size=2, stride=2),
+            nn.BatchNorm2d(32), nn.ReLU(inplace=True)
+        )   # decoder layer 4
+
+        # Output head
+        self.output_conv = nn.Conv2d(32, num_classes, kernel_size=1)
+
+    def forward(self, x):
         # Encoder
-        s1, x = self.enc1(x)    # skip1: (B,  64, 256, 256)
-        s2, x = self.enc2(x)    # skip2: (B, 128, 128, 128)
-        s3, x = self.enc3(x)    # skip3: (B, 256,  64,  64)
-        s4, x = self.enc4(x)    # skip4: (B, 512,  32,  32)
- 
-        # Bottleneck
-        x = self.bottleneck(x)  # (B, 1024, 16, 16)
- 
-        # Decoder
-        x = self.dec1(x, s4)    # (B, 512,  32,  32)
-        x = self.dec2(x, s3)    # (B, 256,  64,  64)
-        x = self.dec3(x, s2)    # (B, 128, 128, 128)
-        x = self.dec4(x, s1)    # (B,  64, 256, 256)
- 
-        # Output
-        return self.output_conv(x)  # (B, 23, 256, 256)
+        s1 = self.enc1(x)        # (B, 64,  128, 128)
+        x  = self.pool(s1)       # (B, 64,   64,  64)
+        s2 = self.enc2(x)        # (B, 64,   64,  64)
+        s3 = self.enc3(s2)       # (B, 128,  32,  32)
+        x  = self.enc4(s3)       # (B, 256,  16,  16)
+
+        # Decoder with skip connections
+        x = self.dec1(x)                              # (B, 128, 32, 32)
+        x = self.dec2(torch.cat([x, s3], dim=1))      # (B, 64,  64, 64)
+        x = self.dec3(torch.cat([x, s2], dim=1))      # (B, 64, 128,128)
+        x = self.dec4(x)                              # (B, 32, 256,256)
+
+        x = F.interpolate(x, size=(config.ANN_H, config.ANN_W),
+                         mode='bilinear', align_corners=False)
+
+        return self.output_conv(x)
     
     def _init_weights(self):
         """Kaiming He initialisation for Conv layers; 1/0 for BN."""
