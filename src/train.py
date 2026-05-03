@@ -252,7 +252,7 @@ def load_model(checkpoint: str = config.CHECKPOINT_PATH,
             "Run train.py first to generate best_model.pth."
         )
  
-    ckpt  = torch.load(checkpoint, map_location=device, weights_only=False)
+    ckpt  = torch.load(checkpoint, map_location="cpu", weights_only=False)
     model = SegNet(num_classes=ckpt.get("num_classes", config.NUM_CLASSES))
     model.load_state_dict(ckpt["model_state"])
     model.to(device).eval()
