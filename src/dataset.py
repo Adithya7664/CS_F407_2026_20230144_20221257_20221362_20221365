@@ -30,12 +30,13 @@ def rgb_mask_to_class_ids(rgb_mask: np.ndarray) -> np.ndarray:
 
 # Applied to the input image before feeding the ANN (256×256, normalised)
 IMAGE_TRANSFORM = transforms.Compose([
-    transforms.Resize((config.ANN_H, config.ANN_W)),   # 256×256
-    transforms.ToTensor(),                              # [0,1], C×H×W
-    transforms.Normalize(
-        mean=[0.485, 0.456, 0.406],   # ImageNet stats — standard for drone imgs
-        std=[0.229, 0.224, 0.225],
-    ),
+    transforms.Resize((config.ANN_H, config.ANN_W)),
+    transforms.RandomHorizontalFlip(),
+    transforms.RandomVerticalFlip(),
+    transforms.ColorJitter(brightness=0.2, contrast=0.2),
+    transforms.ToTensor(),
+    transforms.Normalize(mean=[0.485, 0.456, 0.406],
+                        std=[0.229, 0.224, 0.225]),
 ])
  
 # Applied to the raw image when we need the 800×600 anchor (geometry, display)

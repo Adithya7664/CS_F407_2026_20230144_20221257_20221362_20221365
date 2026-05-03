@@ -11,9 +11,8 @@ dependencies:
   - python=3.10
 
   # ── PyTorch (CUDA 11.8 build; swap cu118→cpu if no GPU locally) ─────────────
-  - pytorch::pytorch=2.1.2
-  - pytorch::torchvision=0.16.2
-  - pytorch::torchaudio=2.1.2
+  - pytorch::pytorch=2.4.1
+  - pytorch::torchvision=0.19.1
   - pytorch::pytorch-cuda=11.8          # remove this line for CPU-only env
 
   # ── Core scientific stack ────────────────────────────────────────────────────
@@ -31,7 +30,7 @@ dependencies:
   - seaborn=0.13.2
 
   # ── Depth estimation (MiDaS loaded via torch.hub) ────────────────────────────
-  - timm=0.9.16                # required by MiDaS_small when loaded via torch.hub
+  - timm=0.9.2                # required by MiDaS_small when loaded via torch.hub
 
   # ── Knowledge graph / graph utilities ────────────────────────────────────────
   - networkx=3.3               # optional but useful for graph visualisation/debug

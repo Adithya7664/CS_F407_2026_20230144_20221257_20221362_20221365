@@ -131,7 +131,14 @@ def train(num_epochs:int = config.NUM_EPOCHS, batch_size:int= config.BATCH_SIZE,
     torch.backends.cudnn.benchmark = True
     #Loss, optimizer, scheuler
     # ignore_index=-1 allows masking unknown pixels if needed
-    criterion  = nn.CrossEntropyLoss(ignore_index=-1)
+    # Count class frequencies and give rare classes higher weight
+    class_weights = torch.ones(config.NUM_CLASSES).to(device)
+    class_weights[0] = 0.1   # unlabeled — reduce weight
+    class_weights[1] = 2.0   # paved-area — boost safe classes
+    class_weights[2] = 2.0   # dirt
+    class_weights[3] = 2.0   # grass
+    class_weights[4] = 2.0   # gravel
+    criterion = nn.CrossEntropyLoss(weight=class_weights, ignore_index=-1)
     from torch.optim import SGD
     optimiser = SGD(model.parameters(), lr=lr, momentum=0.9, weight_decay=1e-4)
     scheduler  = CosineAnnealingLR(optimiser, T_max=num_epochs, eta_min=1e-6)
