@@ -284,6 +284,7 @@ def run_pipeline(image_path: str,
         safe_rgb=safe_rgb,
         placement=placement_panel,
         cost_panel=cost_panel,
+        best_cost=best["cost"],
     )
 
     utils.save_image_rgb(config.OUTPUT_ANALYSIS, dashboard)

@@ -76,25 +76,32 @@ class SegNet(nn.Module):
         self.enc4  = resnet.layer3   # 256ch — encoder layer 4
 
         # Decoder layers
+        # Channel math:
+        #   dec1: enc4(256) → 128
+        #   dec2: dec1(128) + s3(128) = 256 → 64
+        #   dec3: dec2(64)  + s2(64)  = 128 → 64
+        #   dec4: dec3(64)  + s1(64)  = 128 → 32   ← s1 skip now used
         self.dec1 = nn.Sequential(
             nn.ConvTranspose2d(256, 128, kernel_size=2, stride=2),
             nn.BatchNorm2d(128), nn.ReLU(inplace=True)
-        )   # decoder layer 1
+        )
         self.dec2 = nn.Sequential(
             nn.ConvTranspose2d(256, 64, kernel_size=2, stride=2),
             nn.BatchNorm2d(64), nn.ReLU(inplace=True)
-        )   # decoder layer 2
+        )
         self.dec3 = nn.Sequential(
             nn.ConvTranspose2d(128, 64, kernel_size=2, stride=2),
             nn.BatchNorm2d(64), nn.ReLU(inplace=True)
-        )   # decoder layer 3
+        )
         self.dec4 = nn.Sequential(
-            nn.ConvTranspose2d(64, 32, kernel_size=2, stride=2),
+            nn.ConvTranspose2d(128, 32, kernel_size=2, stride=2),
             nn.BatchNorm2d(32), nn.ReLU(inplace=True)
-        )   # decoder layer 4
+        )
 
         # Output head
         self.output_conv = nn.Conv2d(32, num_classes, kernel_size=1)
+
+        self._init_decoder_weights()
 
     def forward(self, x):
         # Encoder
@@ -105,32 +112,30 @@ class SegNet(nn.Module):
         x  = self.enc4(s3)       # (B, 256,  16,  16)
 
         # Decoder with skip connections
-        x = self.dec1(x)                              # (B, 128, 32, 32)
-        x = self.dec2(torch.cat([x, s3], dim=1))      # (B, 64,  64, 64)
-        x = self.dec3(torch.cat([x, s2], dim=1))      # (B, 64, 128,128)
-        x = self.dec4(x)                              # (B, 32, 256,256)
+        x = self.dec1(x)                              # (B, 128,  32,  32)
+        x = self.dec2(torch.cat([x, s3], dim=1))      # (B,  64,  64,  64)
+        x = self.dec3(torch.cat([x, s2], dim=1))      # (B,  64, 128, 128)
+        x = self.dec4(torch.cat([x, s1], dim=1))      # (B,  32, 256, 256) — s1 skip
 
         x = F.interpolate(x, size=(config.ANN_H, config.ANN_W),
                          mode='bilinear', align_corners=False)
 
         return self.output_conv(x)
     
-    def _init_weights(self):
-        """Kaiming He initialisation for Conv layers; 1/0 for BN."""
-        for m in self.modules():
-            if isinstance(m, nn.Conv2d):
-                nn.init.kaiming_normal_(m.weight,
-                                        mode="fan_out",
-                                        nonlinearity="relu")
-                if m.bias is not None:
+    def _init_decoder_weights(self):
+        """Kaiming He init for decoder layers only.
+        Scoped to dec1-dec4 and output_conv so the pretrained ResNet18
+        encoder weights are never overwritten."""
+        decoder_parts = [self.dec1, self.dec2, self.dec3, self.dec4, self.output_conv]
+        for module in decoder_parts:
+            for m in module.modules():
+                if isinstance(m, (nn.Conv2d, nn.ConvTranspose2d)):
+                    nn.init.kaiming_normal_(m.weight, mode="fan_out", nonlinearity="relu")
+                    if m.bias is not None:
+                        nn.init.zeros_(m.bias)
+                elif isinstance(m, nn.BatchNorm2d):
+                    nn.init.ones_(m.weight)
                     nn.init.zeros_(m.bias)
-            elif isinstance(m, nn.BatchNorm2d):
-                nn.init.ones_(m.weight)
-                nn.init.zeros_(m.bias)
-            elif isinstance(m, nn.ConvTranspose2d):
-                nn.init.kaiming_normal_(m.weight,
-                                        mode="fan_out",
-                                        nonlinearity="relu")
                 
 def count_parameters(model: nn.Module) -> int:
     return sum(p.numel() for p in model.parameters() if p.requires_grad)

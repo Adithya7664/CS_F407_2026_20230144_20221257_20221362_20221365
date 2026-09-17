@@ -113,7 +113,8 @@ W_ROUGHNESS = 0.2
 W_SEMANTIC  = 0.4
  
 # ── Safe zone search parameters ───────────────────────────────────────────────
-MAX_SLOPE       = 0.15      # candidates with mean Sobel >= this are discarded
+MAX_SLOPE            = 0.15   # candidates with mean Sobel >= this are discarded
+SAFE_RATIO_THRESHOLD = 0.80   # fraction of interior points that must be on safe pixels
 BOX_W           = 80        # landing bounding box width  (pixels at 800×600)
 BOX_H           = 80        # landing bounding box height (pixels at 800×600)
 SEARCH_STEP     = 20        # grid search stride (pixels)
@@ -125,7 +126,7 @@ MIDAS_MODEL     = "MiDaS_small"
 MIDAS_REPO      = "intel-isl/MiDaS"
  
 # ── Mission config path ───────────────────────────────────────────────────────
-MISSION_CONFIG_PATH = "mission_config.json"
+MISSION_CONFIG_PATH = "mission_config.json"   # see src/mission_config.json
  
 # ── Output file names ─────────────────────────────────────────────────────────
 OUTPUT_IMAGE    = "output.jpg"

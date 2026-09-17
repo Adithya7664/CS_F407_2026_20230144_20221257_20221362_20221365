@@ -129,16 +129,21 @@ def train(num_epochs:int = config.NUM_EPOCHS, batch_size:int= config.BATCH_SIZE,
     print(f"  Trainable params : {count_parameters(model):,}\n")
     print(f"Model device: {next(model.parameters()).device}")
     torch.backends.cudnn.benchmark = True
-    #Loss, optimizer, scheuler
-    # ignore_index=-1 allows masking unknown pixels if needed
-    # # Count class frequencies and give rare classes higher weight
-    # class_weights = torch.ones(config.NUM_CLASSES).to(device)
-    # class_weights[0] = 0.5   # unlabeled — reduce slightly
-    # class_weights[1] = 1.5   # paved-area
-    # class_weights[2] = 1.5   # dirt
-    # class_weights[3] = 1.5   # grass
-    # class_weights[4] = 1.5   # gravel
-    criterion = nn.CrossEntropyLoss(ignore_index=-1)
+    #Loss, optimizer, scheduler
+    # Class 23 ("conflicting") appears where LabelMe polygons overlap — ignore it.
+    # Safe landing classes (1-4) and rare obstacle/person classes get higher weight
+    # to counteract the dataset's heavy imbalance toward paved-area and vegetation.
+    class_weights = torch.ones(config.NUM_CLASSES, device=device)
+    class_weights[0]  = 0.3   # unlabeled    — mostly borders, not useful
+    class_weights[1]  = 2.0   # paved-area   — SAFE, important
+    class_weights[2]  = 2.0   # dirt         — SAFE, important
+    class_weights[3]  = 2.0   # grass        — SAFE, important
+    class_weights[4]  = 2.0   # gravel       — SAFE, important
+    class_weights[15] = 3.0   # person       — must not land on people
+    class_weights[17] = 2.5   # car          — obstacle
+    class_weights[21] = 3.0   # ar-marker    — very rare, critical for nav
+    class_weights[22] = 2.5   # obstacle     — must avoid
+    criterion = nn.CrossEntropyLoss(weight=class_weights, ignore_index=23)
     optimiser = Adam([
     {'params': model.enc1.parameters(), 'lr': lr * 0.1},
     {'params': model.enc2.parameters(), 'lr': lr * 0.1},

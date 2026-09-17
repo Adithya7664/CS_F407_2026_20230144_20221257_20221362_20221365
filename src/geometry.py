@@ -145,20 +145,24 @@ def _mean_roughness_at_box(sobel_map: np.ndarray,
 
 #safe pixel ratio at a candidate box
 
-def _all_pts_on_safe_mask(safe_mask: np.ndarray,
-                           pts: np.ndarray) -> bool:
+def _safe_ratio_at_box(safe_mask: np.ndarray, pts: np.ndarray) -> float:
     """
-    Returns True only if every interior sample point falls on a white
-    (255) pixel of the binary safe mask.
+    Returns the fraction of interior sample points that fall on white (255)
+    pixels of the binary safe mask.
+
+    Using a ratio instead of requiring 100% avoids rejecting valid landing zones
+    that touch a terrain boundary — a box 95% on pavement is still a good candidate.
     """
     H, W = safe_mask.shape
+    safe_count = 0
+    total = 0
     for x, y in pts:
         xi, yi = int(round(x)), int(round(y))
-        if not (0 <= xi < W and 0 <= yi < H):
-            return False
-        if safe_mask[yi, xi] == 0:
-            return False
-    return True
+        if 0 <= xi < W and 0 <= yi < H:
+            total += 1
+            if safe_mask[yi, xi] == 255:
+                safe_count += 1
+    return safe_count / total if total > 0 else 0.0
 
 #rotational grid search
 def find_candidate_boxes(safe_mask: np.ndarray, depth_map:  np.ndarray, box_w: int = config.BOX_W,box_h: int = config.BOX_H, step: int = config.SEARCH_STEP, angles: list = config.ANGLE_STEPS,max_slope: float = config.MAX_SLOPE)-> list[dict]:
@@ -212,9 +216,9 @@ def find_candidate_boxes(safe_mask: np.ndarray, depth_map:  np.ndarray, box_w: i
                 if not _box_fully_inside_image(corners, W, H):
                     continue
  
-                # 2. All interior points must be on safe pixels
+                # 2. Majority of interior points must be on safe pixels
                 pts = _interior_sample_points(cx, cy, box_w, box_h, angle)
-                if not _all_pts_on_safe_mask(safe_mask, pts):
+                if _safe_ratio_at_box(safe_mask, pts) < config.SAFE_RATIO_THRESHOLD:
                     continue
  
                 # 3. Roughness filter
@@ -321,11 +325,11 @@ def upscale_seg_map(seg_256: np.ndarray) -> np.ndarray:
     -------
     seg_800 : np.ndarray  shape (600, 800),  dtype int
     """
-    seg_uint8 = seg_256.astype(np.uint8)
-    seg_800   = cv2.resize(seg_uint8,
-                           (config.MAIN_W, config.MAIN_H),
-                           interpolation=cv2.INTER_NEAREST)
-    return seg_800.astype(np.int32)
+    # Stay in int32 throughout — no uint8 cast which would corrupt class IDs >= 128
+    seg_800 = cv2.resize(seg_256.astype(np.int32),
+                         (config.MAIN_W, config.MAIN_H),
+                         interpolation=cv2.INTER_NEAREST)
+    return seg_800
 
 if __name__ == "__main__":
     print("Running geometry.py sanity check…")

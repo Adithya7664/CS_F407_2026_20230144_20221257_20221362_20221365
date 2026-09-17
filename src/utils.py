@@ -165,6 +165,7 @@ def build_analysis_dashboard(
     safe_rgb:   np.ndarray,
     placement:  np.ndarray,
     cost_panel: np.ndarray,
+    best_cost:  float = 0.0,
     panel_size: tuple = (267, 200),   # (W, H) per panel
 ) -> np.ndarray:
     
@@ -207,7 +208,7 @@ def build_analysis_dashboard(
               "Semantic Segmentation (U-Net)",
               "Depth Map (MiDaS)",
               "Safe Zone Mask",
-              f"Best Placement (Cost: {0:.4f})",   # cost overlaid later
+              f"Best Placement (Cost: {best_cost:.4f})",
               "Cost Breakdown"]
  
     titled = []
