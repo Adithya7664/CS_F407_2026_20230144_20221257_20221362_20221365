@@ -1,14 +1,15 @@
 import os
 import time
 import argparse
- 
+
 import numpy as np
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from torch.optim import Adam
 from torch.optim.lr_scheduler import CosineAnnealingLR
 from tqdm import tqdm
- 
+
 import config
 from dataset import get_dataloaders
 from model import SegNet, count_parameters
@@ -17,6 +18,47 @@ try:
     _TB_AVAILABLE = True
 except ImportError:
     _TB_AVAILABLE = False
+
+
+class FocalLoss(nn.Module):
+    """
+    Focal Loss for dense semantic segmentation with class imbalance.
+
+    Standard CrossEntropyLoss gives equal weight to every pixel.
+    Focal Loss multiplies each pixel's loss by (1 - p_t)^gamma, where
+    p_t is the model's confidence in the correct class:
+      - If the model is already confident (p_t ≈ 1, easy pixel) → factor ≈ 0 → loss suppressed
+      - If the model is wrong / uncertain (p_t ≈ 0, hard pixel) → factor ≈ 1 → loss preserved
+
+    Effect: training effort automatically shifts toward the rare, hard classes
+    (person, ar-marker, obstacle) that standard CE ignores once dominant classes converge.
+
+    gamma=2 is the standard value from the original Focal Loss paper (Lin et al. 2017).
+    """
+    def __init__(self, gamma: float = 2.0,
+                 weight: torch.Tensor = None,
+                 ignore_index: int = 23):
+        super().__init__()
+        self.gamma        = gamma
+        self.weight       = weight
+        self.ignore_index = ignore_index
+
+    def forward(self, inputs: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
+        # Per-pixel cross-entropy (unreduced) — shape (B, H, W)
+        ce = F.cross_entropy(inputs, targets,
+                             weight=self.weight,
+                             ignore_index=self.ignore_index,
+                             reduction="none")
+
+        # p_t = probability assigned to the correct class
+        pt = torch.exp(-ce)
+
+        # Focal weight: (1 - p_t)^gamma
+        focal = ((1.0 - pt) ** self.gamma) * ce
+
+        # Average only over non-ignored pixels
+        mask = targets != self.ignore_index
+        return focal[mask].mean() if mask.any() else focal.mean()
 
 #Metrics
 def pixel_accuracy(preds: torch.Tensor, targets: torch.Tensor) -> float:
@@ -129,21 +171,21 @@ def train(num_epochs:int = config.NUM_EPOCHS, batch_size:int= config.BATCH_SIZE,
     print(f"  Trainable params : {count_parameters(model):,}\n")
     print(f"Model device: {next(model.parameters()).device}")
     torch.backends.cudnn.benchmark = True
-    #Loss, optimizer, scheduler
-    # Class 23 ("conflicting") appears where LabelMe polygons overlap — ignore it.
-    # Safe landing classes (1-4) and rare obstacle/person classes get higher weight
-    # to counteract the dataset's heavy imbalance toward paved-area and vegetation.
+    # ── Loss: Focal Loss with class weights ──────────────────────────────────
+    # Focal Loss focuses training on hard/rare pixels automatically via the
+    # (1-p_t)^gamma modulation. Class weights provide an additional manual
+    # boost to the most important rare classes on top of that.
     class_weights = torch.ones(config.NUM_CLASSES, device=device)
-    class_weights[0]  = 0.3   # unlabeled    — mostly borders, not useful
-    class_weights[1]  = 2.0   # paved-area   — SAFE, important
-    class_weights[2]  = 2.0   # dirt         — SAFE, important
-    class_weights[3]  = 2.0   # grass        — SAFE, important
-    class_weights[4]  = 2.0   # gravel       — SAFE, important
+    class_weights[0]  = 0.3   # unlabeled    — mostly annotation borders
+    class_weights[1]  = 2.0   # paved-area   — SAFE
+    class_weights[2]  = 2.0   # dirt         — SAFE
+    class_weights[3]  = 2.0   # grass        — SAFE
+    class_weights[4]  = 2.0   # gravel       — SAFE
     class_weights[15] = 3.0   # person       — must not land on people
     class_weights[17] = 2.5   # car          — obstacle
-    class_weights[21] = 3.0   # ar-marker    — very rare, critical for nav
+    class_weights[21] = 3.0   # ar-marker    — very rare, critical
     class_weights[22] = 2.5   # obstacle     — must avoid
-    criterion = nn.CrossEntropyLoss(weight=class_weights, ignore_index=23)
+    criterion = FocalLoss(gamma=2.0, weight=class_weights, ignore_index=23)
     optimiser = Adam([
     {'params': model.enc1.parameters(), 'lr': lr * 0.1},
     {'params': model.enc2.parameters(), 'lr': lr * 0.1},

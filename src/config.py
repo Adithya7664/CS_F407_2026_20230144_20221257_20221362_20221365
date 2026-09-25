@@ -20,7 +20,7 @@ ANN_W = 256
 ANN_H = 256
  
 # ── Training hyper-parameters ─────────────────────────────────────────────────
-NUM_EPOCHS      = 50
+NUM_EPOCHS      = 75
 BATCH_SIZE      = 2
 LEARNING_RATE = 3e-4
 NUM_WORKERS     = 0
