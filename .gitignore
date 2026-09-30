@@ -1,0 +1,18 @@
+# Training data — too large for git (400 images @ 6000x4000px)
+src/training_set/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# TensorBoard logs
+src/runs/
+runs/
+
+# Jupyter checkpoints
+.ipynb_checkpoints/
+
+# Output images from inference runs
+src/output.jpg
+src/output_analysis.jpg
