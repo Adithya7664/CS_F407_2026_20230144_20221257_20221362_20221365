@@ -60,6 +60,52 @@ class FocalLoss(nn.Module):
         mask = targets != self.ignore_index
         return focal[mask].mean() if mask.any() else focal.mean()
 
+
+class DiceLoss(nn.Module):
+    """
+    Soft Dice Loss averaged over all non-ignored classes present in the batch.
+
+    Dice directly optimises overlap (numerator = 2·|A∩B|, denominator = |A|+|B|),
+    so it is a proxy for IoU.  Pairing it with Focal Loss (which is a better
+    cross-entropy proxy) gives a hybrid that improves both pixel accuracy and mIoU.
+    """
+    def __init__(self, ignore_index: int = 23, smooth: float = 1.0):
+        super().__init__()
+        self.ignore_index = ignore_index
+        self.smooth       = smooth
+
+    def forward(self, inputs: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
+        num_classes = inputs.shape[1]
+        probs       = F.softmax(inputs, dim=1)          # (B, C, H, W)
+
+        valid = targets != self.ignore_index             # (B, H, W)
+        dice_scores = []
+        for cls in range(num_classes):
+            if cls == self.ignore_index:
+                continue
+            target_cls = ((targets == cls) & valid).float()   # (B, H, W)
+            pred_cls   = probs[:, cls] * valid.float()        # (B, H, W)
+            if target_cls.sum() == 0 and pred_cls.sum() == 0:
+                continue
+            intersection = (pred_cls * target_cls).sum()
+            dice = (2.0 * intersection + self.smooth) / (pred_cls.sum() + target_cls.sum() + self.smooth)
+            dice_scores.append(1.0 - dice)
+
+        return torch.stack(dice_scores).mean() if dice_scores else inputs.sum() * 0.0
+
+
+class HybridLoss(nn.Module):
+    """Focal Loss + Dice Loss weighted sum."""
+    def __init__(self, focal: nn.Module, dice: nn.Module, alpha: float = 0.5):
+        super().__init__()
+        self.focal = focal
+        self.dice  = dice
+        self.alpha = alpha   # weight on focal; (1-alpha) on dice
+
+    def forward(self, inputs: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
+        return self.alpha * self.focal(inputs, targets) + (1.0 - self.alpha) * self.dice(inputs, targets)
+
+
 #Metrics
 def pixel_accuracy(preds: torch.Tensor, targets: torch.Tensor) -> float:
     """
@@ -185,7 +231,9 @@ def train(num_epochs:int = config.NUM_EPOCHS, batch_size:int= config.BATCH_SIZE,
     class_weights[17] = 2.5   # car          — obstacle
     class_weights[21] = 3.0   # ar-marker    — very rare, critical
     class_weights[22] = 2.5   # obstacle     — must avoid
-    criterion = FocalLoss(gamma=2.0, weight=class_weights, ignore_index=23)
+    focal     = FocalLoss(gamma=2.0, weight=class_weights, ignore_index=23)
+    dice      = DiceLoss(ignore_index=23)
+    criterion = HybridLoss(focal, dice, alpha=0.5)
     optimiser = Adam([
     {'params': model.enc1.parameters(), 'lr': lr * 0.1},
     {'params': model.enc2.parameters(), 'lr': lr * 0.1},
@@ -310,7 +358,7 @@ def load_model(checkpoint: str = config.CHECKPOINT_PATH,
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Train SegNet on Graz Drone Dataset")
-    parser.add_argument("--epochs",     type=int,   default=config.NUM_EPOCHS)
+    parser.add_argument("--epochs",     type=int,   default=config.NUM_EPOCHS)  # now 100
     parser.add_argument("--batch-size", type=int,   default=config.BATCH_SIZE)
     parser.add_argument("--lr",         type=float, default=config.LEARNING_RATE)
     parser.add_argument("--checkpoint", type=str,   default=config.CHECKPOINT_PATH)

@@ -16,11 +16,11 @@ MAIN_W = 800
 MAIN_H = 600
  
 # ANN inference resolution (downscaled from MAIN before feeding the model)
-ANN_W = 256
-ANN_H = 256
- 
+ANN_W = 384
+ANN_H = 384
+
 # ── Training hyper-parameters ─────────────────────────────────────────────────
-NUM_EPOCHS      = 75
+NUM_EPOCHS      = 100
 BATCH_SIZE      = 2
 LEARNING_RATE = 3e-4
 NUM_WORKERS     = 0
