@@ -20,7 +20,7 @@ ANN_W = 384
 ANN_H = 384
 
 # ── Training hyper-parameters ─────────────────────────────────────────────────
-NUM_EPOCHS      = 100
+NUM_EPOCHS      = 80
 BATCH_SIZE      = 2
 LEARNING_RATE = 3e-4
 NUM_WORKERS     = 0
