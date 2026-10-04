@@ -21,7 +21,10 @@ import argparse
 import cv2
 import numpy as np
 import torch
+import torch.nn.functional as F
 from torchvision import transforms
+import torchvision.transforms.functional as TF
+from PIL import Image
 
 import config
 import utils
@@ -65,43 +68,46 @@ def load_midas(device: torch.device):
 def run_segmentation(model, image_800: np.ndarray,
                      device: torch.device) -> np.ndarray:
     """
-    Run the trained SegNet on a single 800×600 RGB image.
+    Run the trained SegNet on a single 800×600 RGB image with 4-way
+    test-time augmentation (original, hflip, vflip, both flips).
 
-    Steps:
-      • Downscale to 256×256 + normalise  → feed ANN
-      • Argmax logits → (256, 256) class-ID map
-      • Upscale back to 800×600 via nearest-neighbour
-
-    Parameters
-    ----------
-    model     : SegNet  (eval mode)
-    image_800 : (600, 800, 3) uint8 RGB
-    device    : torch.device
+    Probabilities from each augmented view are un-flipped back to the
+    canonical orientation and averaged before argmax.  This typically
+    adds +2-4% mIoU at zero training cost.
 
     Returns
     -------
     seg_map : (600, 800) int32  class-ID map at 800×600
     """
-    # Preprocess: resize to 256×256 and normalise
-    ann_transform = transforms.Compose([
-        transforms.ToPILImage(),
+    _norm = transforms.Compose([
         transforms.Resize((config.ANN_H, config.ANN_W)),
         transforms.ToTensor(),
         transforms.Normalize(mean=[0.485, 0.456, 0.406],
                              std=[0.229, 0.224, 0.225]),
     ])
 
-    tensor = ann_transform(image_800).unsqueeze(0).to(device)  # (1,3,256,256)
+    pil = Image.fromarray(image_800)
 
-    with torch.no_grad():
-        logits = model(tensor)                    # (1, 23, 256, 256)
+    # Four views: (augmented_pil, flip_dims_to_undo)
+    views = [
+        (pil,                      []),
+        (TF.hflip(pil),            [3]),
+        (TF.vflip(pil),            [2]),
+        (TF.hflip(TF.vflip(pil)), [2, 3]),
+    ]
 
-    # Argmax → (256, 256) class IDs
-    seg_256 = logits.argmax(dim=1).squeeze(0).cpu().numpy().astype(np.int32)
+    avg_prob = None
+    for aug_pil, undo_dims in views:
+        tensor = _norm(aug_pil).unsqueeze(0).to(device)
+        with torch.no_grad():
+            logits = model(tensor)                         # (1, C, H, W)
+        prob = F.softmax(logits, dim=1)
+        if undo_dims:
+            prob = prob.flip(dims=undo_dims)
+        avg_prob = prob if avg_prob is None else avg_prob + prob
 
-    # Upscale to 800×600 (nearest-neighbour preserves class labels)
-    seg_800 = geometry.upscale_seg_map(seg_256)   # (600, 800) int32
-
+    seg_ann = avg_prob.argmax(dim=1).squeeze(0).cpu().numpy().astype(np.int32)
+    seg_800 = geometry.upscale_seg_map(seg_ann)
     return seg_800
 
 

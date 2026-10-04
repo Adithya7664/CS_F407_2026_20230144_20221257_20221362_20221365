@@ -7,7 +7,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.optim import Adam
-from torch.optim.lr_scheduler import CosineAnnealingLR
+from torch.optim.lr_scheduler import OneCycleLR
 from tqdm import tqdm
 
 import config
@@ -140,10 +140,17 @@ def mean_iou(preds: torch.Tensor, targets: torch.Tensor, num_classes: int=config
  
     return float(np.mean(ious)) if ious else 0.0
 
-def run_epoch(model:nn.Module, loader, criterion:nn.Module, optimizer:torch.optim.Optimizer, device:torch.device, training:bool) -> dict:
+def run_epoch(model: nn.Module, loader, criterion: nn.Module,
+              optimizer: torch.optim.Optimizer, device: torch.device,
+              training: bool, scheduler=None, accum_steps: int = 1) -> dict:
     """
     Run one full pass over `loader`.
- 
+
+    Parameters
+    ----------
+    scheduler   : OneCycleLR (or None) — stepped every batch when training
+    accum_steps : gradient accumulation steps (effective batch = bs × accum_steps)
+
     Returns
     -------
     dict with keys: loss, pixel_acc, mean_iou
@@ -151,39 +158,50 @@ def run_epoch(model:nn.Module, loader, criterion:nn.Module, optimizer:torch.opti
     model.train(training)
     desc = "  Train" if training else "  Val  "
     total_loss = 0.0
-    total_acc = 0.0
-    total_iou = 0.0
-    n_batches = 0
+    total_acc  = 0.0
+    total_iou  = 0.0
+    n_batches  = 0
+
     context = torch.enable_grad if training else torch.no_grad
+    if training:
+        optimizer.zero_grad()
+
     with context():
-        for batch in tqdm(loader, desc=desc, leave=False, ncols=80):
-            # dataset returns: image_tensor, mask_tensor, main_tensor, filename
+        for i, batch in enumerate(tqdm(loader, desc=desc, leave=False, ncols=80)):
             images, masks, _, _ = batch
-            images = images.to(device, non_blocking=True)  # (B, 3, 256, 256)
-            masks  = masks.to(device,  non_blocking=True)  # (B, 256, 256) int64
- 
-            logits = model(images)                          # (B, 23, 256, 256)
+            images = images.to(device, non_blocking=True)
+            masks  = masks.to(device,  non_blocking=True)
+
+            logits = model(images)
             loss   = criterion(logits, masks)
- 
+
             if training:
-                optimizer.zero_grad()
-                loss.backward()
-                nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
-                optimizer.step()
- 
+                (loss / accum_steps).backward()
+
+                if (i + 1) % accum_steps == 0 or (i + 1) == len(loader):
+                    nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+                    optimizer.step()
+                    optimizer.zero_grad()
+
+                if scheduler is not None:
+                    scheduler.step()
+
             total_loss += loss.item()
             total_acc  += pixel_accuracy(logits.detach(), masks)
             total_iou  += mean_iou(logits.detach(), masks)
             n_batches  += 1
- 
+
     return {
-        "loss":       total_loss / max(n_batches, 1),
-        "pixel_acc":  total_acc  / max(n_batches, 1),
-        "mean_iou":   total_iou  / max(n_batches, 1),
+        "loss":      total_loss / max(n_batches, 1),
+        "pixel_acc": total_acc  / max(n_batches, 1),
+        "mean_iou":  total_iou  / max(n_batches, 1),
     }
     
 #Main training function
-def train(num_epochs:int = config.NUM_EPOCHS, batch_size:int= config.BATCH_SIZE, lr:float = config.LEARNING_RATE, checkpoint:str= config.CHECKPOINT_PATH, resume:bool  = False, tb_log_dir:str= "runs/segnet"):
+def train(num_epochs: int = config.NUM_EPOCHS, batch_size: int = config.BATCH_SIZE,
+          lr: float = config.LEARNING_RATE, checkpoint: str = config.CHECKPOINT_PATH,
+          resume: bool = False, tb_log_dir: str = "runs/segnet",
+          accum_steps: int = 4):
     """
     Full training + validation loop.
  
@@ -235,17 +253,30 @@ def train(num_epochs:int = config.NUM_EPOCHS, batch_size:int= config.BATCH_SIZE,
     dice      = DiceLoss(ignore_index=23)
     criterion = HybridLoss(focal, dice, alpha=0.5)
     optimiser = Adam([
-    {'params': model.enc1.parameters(), 'lr': lr * 0.1},
-    {'params': model.enc2.parameters(), 'lr': lr * 0.1},
-    {'params': model.enc3.parameters(), 'lr': lr * 0.1},
-    {'params': model.enc4.parameters(), 'lr': lr * 0.1},
-    {'params': model.dec1.parameters(), 'lr': lr * 0.5},
-    {'params': model.dec2.parameters(), 'lr': lr * 0.5},
-    {'params': model.dec3.parameters(), 'lr': lr * 0.5},
-    {'params': model.dec4.parameters(), 'lr': lr * 0.5},
-    {'params': model.output_conv.parameters(), 'lr': lr},
-], weight_decay=1e-4)
-    scheduler  = CosineAnnealingLR(optimiser, T_max=num_epochs, eta_min=1e-6)
+        {'params': model.enc1.parameters(), 'lr': lr * 0.1},
+        {'params': model.enc2.parameters(), 'lr': lr * 0.1},
+        {'params': model.enc3.parameters(), 'lr': lr * 0.1},
+        {'params': model.enc4.parameters(), 'lr': lr * 0.1},
+        {'params': model.dec1.parameters(), 'lr': lr * 0.5},
+        {'params': model.dec2.parameters(), 'lr': lr * 0.5},
+        {'params': model.dec3.parameters(), 'lr': lr * 0.5},
+        {'params': model.dec4.parameters(), 'lr': lr * 0.5},
+        {'params': model.output_conv.parameters(), 'lr': lr},
+    ], weight_decay=1e-4)
+    # OneCycleLR: warmup 30% → peak → cosine decay. Called per batch.
+    # Max LR per group mirrors the differential LR ratios above.
+    scheduler = OneCycleLR(
+        optimiser,
+        max_lr=[lr*0.1, lr*0.1, lr*0.1, lr*0.1,
+                lr*0.5, lr*0.5, lr*0.5, lr*0.5,
+                lr],
+        steps_per_epoch=len(train_loader),
+        epochs=num_epochs,
+        pct_start=0.3,
+        anneal_strategy='cos',
+        div_factor=10.0,
+        final_div_factor=100.0,
+    )
     #TensorBoard
     writer = None
     if _TB_AVAILABLE:
@@ -268,12 +299,11 @@ def train(num_epochs:int = config.NUM_EPOCHS, batch_size:int= config.BATCH_SIZE,
                "train_acc":  [], "val_acc":  [],
                "train_iou":  [], "val_iou":  []}
     for epoch in range(start_epoch, num_epochs + 1):
-        t0=time.time()
-        trn=run_epoch(model, train_loader, criterion, optimiser, device, training=True)
-        val = run_epoch(model, val_loader, criterion,
-                        None, device, training=False)
- 
-        scheduler.step()
+        t0  = time.time()
+        trn = run_epoch(model, train_loader, criterion, optimiser, device,
+                        training=True, scheduler=scheduler, accum_steps=accum_steps)
+        val = run_epoch(model, val_loader,   criterion, None,      device,
+                        training=False)
         elapsed = time.time() - t0
         history["train_loss"].append(trn["loss"])
         history["val_loss"].append(val["loss"])
@@ -286,7 +316,7 @@ def train(num_epochs:int = config.NUM_EPOCHS, batch_size:int= config.BATCH_SIZE,
             writer.add_scalars("Loss",       {"train": trn["loss"],      "val": val["loss"]},      epoch)
             writer.add_scalars("PixelAcc",   {"train": trn["pixel_acc"], "val": val["pixel_acc"]}, epoch)
             writer.add_scalars("mIoU",       {"train": trn["mean_iou"],  "val": val["mean_iou"]},  epoch)
-            writer.add_scalar("LR", scheduler.get_last_lr()[0], epoch)
+            writer.add_scalar("LR", optimiser.param_groups[-1]['lr'], epoch)
  
         print(
             f"Epoch [{epoch:03d}/{num_epochs}]  "

@@ -65,10 +65,11 @@ class SegNet(nn.Module):
     def __init__(self, num_classes=config.NUM_CLASSES):
         super().__init__()
         
-        # Pretrained ResNet18 encoder — loads ImageNet weights automatically
-        resnet = models.resnet18(weights=models.ResNet18_Weights.DEFAULT)
-        
-        # Encoder layers from ResNet18
+        # Pretrained ResNet34 encoder — stronger than ResNet18 (3×more blocks),
+        # same channel sizes so the decoder is unchanged.
+        resnet = models.resnet34(weights=models.ResNet34_Weights.DEFAULT)
+
+        # Encoder layers from ResNet34
         self.enc1 = nn.Sequential(resnet.conv1, resnet.bn1, resnet.relu)  # 64ch
         self.pool  = resnet.maxpool
         self.enc2  = resnet.layer1   # 64ch  — encoder layer 2
@@ -147,7 +148,7 @@ if __name__ == "__main__":
     out   = model(dummy)
  
     print(f"Input  shape : {dummy.shape}")
-    print(f"Output shape : {out.shape}   (expected: [2, {config.NUM_CLASSES}, 256, 256])")
+    print(f"Output shape : {out.shape}   (expected: [2, {config.NUM_CLASSES}, {config.ANN_H}, {config.ANN_W}])")
     print(f"Trainable parameters : {count_parameters(model):,}")
     assert out.shape == (2, config.NUM_CLASSES, config.ANN_H, config.ANN_W), \
         "Output shape mismatch!"

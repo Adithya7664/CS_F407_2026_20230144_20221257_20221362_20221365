@@ -96,14 +96,22 @@ class GrazDataset(Dataset):
         mask_path = self._find_mask(stem)
         mask_pil  = Image.open(mask_path).convert("RGB")
 
-        # ── Resize both to 256×256 before augmentation ───────────────────────
-        image_pil = image_pil.resize((config.ANN_W, config.ANN_H), resample=Image.BILINEAR)
-        mask_pil  = mask_pil.resize( (config.ANN_W, config.ANN_H), resample=Image.NEAREST)
-
         # ── Geometric augmentations — SAME decision applied to image & mask ──
-        # This is the critical part: both image and mask must be transformed
-        # identically so the labels stay aligned with the pixels.
         if self.augment:
+            # Scale jitter: random crop to 75-100% of original before resizing.
+            # Aerial images are shot at varying altitudes — teaching scale
+            # invariance here is the single highest-impact augmentation for
+            # drone/aerial datasets.
+            if random.random() < 0.6:
+                w, h   = image_pil.size
+                scale  = random.uniform(0.75, 1.0)
+                new_w  = max(1, int(w * scale))
+                new_h  = max(1, int(h * scale))
+                left   = random.randint(0, w - new_w)
+                top    = random.randint(0, h - new_h)
+                image_pil = TF.crop(image_pil, top, left, new_h, new_w)
+                mask_pil  = TF.crop(mask_pil,  top, left, new_h, new_w)
+
             if random.random() < 0.5:
                 image_pil = TF.hflip(image_pil)
                 mask_pil  = TF.hflip(mask_pil)
@@ -112,14 +120,16 @@ class GrazDataset(Dataset):
                 image_pil = TF.vflip(image_pil)
                 mask_pil  = TF.vflip(mask_pil)
 
-            # Small random rotation (±10°) — keeps most of the frame intact
             if random.random() < 0.3:
-                angle     = random.uniform(-10, 10)
+                angle     = random.uniform(-15, 15)
                 image_pil = TF.rotate(image_pil, angle, interpolation=TF.InterpolationMode.BILINEAR)
                 mask_pil  = TF.rotate(mask_pil,  angle, interpolation=TF.InterpolationMode.NEAREST)
 
-            # Colour jitter on image only — mask is class IDs, not colour
             image_pil = _COLOR_JITTER(image_pil)
+
+        # ── Resize both to ANN resolution after augmentation ─────────────────
+        image_pil = image_pil.resize((config.ANN_W, config.ANN_H), resample=Image.BILINEAR)
+        mask_pil  = mask_pil.resize( (config.ANN_W, config.ANN_H), resample=Image.NEAREST)
 
         # ── Convert to tensors ───────────────────────────────────────────────
         image_tensor = _TO_TENSOR_NORM(image_pil)   # (3, 256, 256) normalised

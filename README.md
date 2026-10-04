@@ -20,9 +20,9 @@
 
 The system takes a single aerial drone image and a user-specified target coordinate, then outputs the optimal package drop location by:
 
-1. **Semantic Segmentation** — A custom U-Net with pretrained ResNet18 encoder (4 encoder + 4 decoder layers) predicts per-pixel class labels across 24 terrain classes
+1. **Semantic Segmentation** — A custom U-Net with pretrained ResNet34 encoder (4 encoder + 4 decoder layers) predicts per-pixel class labels across 23 terrain classes, using test-time augmentation (4-way flip ensemble) at inference
 2. **Depth Estimation** — Intel MiDaS (MiDaS_small) produces a relative depth map to measure terrain roughness/slope
-3. **Safe Zone Search** — A rotational grid search finds candidate bounding boxes that lie entirely on safe terrain classes (paved-area, dirt, grass, gravel) and pass a slope filter
+3. **Safe Zone Search** — A rotational grid search finds candidate bounding boxes where ≥80% of interior pixels are safe terrain classes (paved-area, dirt, grass, gravel) and pass a slope filter
 4. **Knowledge Graph** — A 3-layer spreading activation graph computes terrain penalty scores based on the package's traits (fragile, heavy, valuable, biohazard)
 5. **Cost Ranking** — Candidates are ranked by a weighted cost function combining distance, roughness, and semantic penalty
 
@@ -34,8 +34,8 @@ The system takes a single aerial drone image and a user-specified target coordin
 src/
 ├── config.py              # All constants — image sizes, class labels, cost weights
 ├── dataset.py             # GrazDataset class — loads images + RGB masks
-├── model.py               # SegNet — U-Net with pretrained ResNet18 encoder
-├── train.py               # Training loop — CrossEntropy + Adam, saves best_model.pth
+├── model.py               # SegNet — U-Net with pretrained ResNet34 encoder
+├── train.py               # Training loop — Focal+Dice + OneCycleLR, saves best_model.pth
 ├── geometry.py            # Safe mask, rotational grid search, cost scoring
 ├── knowledge_graph.py     # 3-layer spreading activation graph, think() function
 ├── semantic_brain.py      # Terrain classifier + mission_config.json parser
@@ -97,11 +97,12 @@ pip install torch-directml
 
 | Metric | Value |
 |---|---|
-| Epochs trained | 20 |
-| Final Train Loss | ~1.5 |
-| Final Val Loss | ~1.7 |
-| Final Val Accuracy | ~55% |
-| Training Hardware | Intel Arc A370M (DirectML) |
+| Best epoch | 58 / 75 |
+| Best val loss | 0.7369 |
+| Val accuracy | 80.51% |
+| Val mIoU | 26.22% |
+| Training hardware | Kaggle T4 GPU (16 GB VRAM) |
+| Training time | ~7.2 hours |
 
 ---
 
@@ -212,12 +213,5 @@ All penalty scores derived solely from edge-weight accumulation — no if/else c
 ## Sample Results
 Sample results are already in the src file for a particular image
 ---
-
-## Known Limitations
-
-- Model trained for only 20 epochs due to hardware constraints (Intel Arc A370M, 4GB VRAM)
-- Batch size limited to 2 due to VRAM — causes noisy gradient updates
-- DirectML backend (Windows Intel GPU) has some operator fallbacks to CPU
-- 55% pixel accuracy is sufficient for demonstrating the end-to-end pipeline
 
 ---

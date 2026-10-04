@@ -202,10 +202,11 @@ def think(active_nodes: list[str]) -> dict[str, float]:
     return terrain_scores
 
 #terrain name-class mapping
+# Class 2 (dirt) and class 4 (gravel) both map to the Dirt terrain type.
 TERRAIN_TO_CLASS_IDS: dict[str, list[int]] = {
     "Pavement": [1],
     "Grass":    [3],
-    "Dirt":     [4],
+    "Dirt":     [2, 4],
 }
  
 CLASS_ID_TO_TERRAIN: dict[int, str] = {
