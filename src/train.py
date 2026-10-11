@@ -290,6 +290,8 @@ def train(num_epochs: int = config.NUM_EPOCHS, batch_size: int = config.BATCH_SI
         ckpt = torch.load(checkpoint, map_location=device)
         model.load_state_dict(ckpt["model_state"])
         optimiser.load_state_dict(ckpt["optimiser_state"])
+        if "scheduler_state" in ckpt:
+            scheduler.load_state_dict(ckpt["scheduler_state"])
         start_epoch   = ckpt.get("epoch", 1) + 1
         best_val_loss = ckpt.get("best_val_loss", float("inf"))
         print(f"  Resumed from epoch {start_epoch - 1}  "
@@ -326,16 +328,19 @@ def train(num_epochs: int = config.NUM_EPOCHS, batch_size: int = config.BATCH_SI
             f"ValIoU: {val['mean_iou']*100:.2f}%  "
             f"({elapsed:.1f}s)"
         )
+        # Save latest every epoch so we can resume after a timeout
+        _save_checkpoint(
+            path="latest_model.pth",
+            model=model, optimiser=optimiser, scheduler=scheduler,
+            epoch=epoch, best_val_loss=best_val_loss, val_metrics=val,
+        )
         #save best checkpoint
         if val["loss"] < best_val_loss:
             best_val_loss = val["loss"]
             _save_checkpoint(
                 path=checkpoint,
-                model=model,
-                optimiser=optimiser,
-                epoch=epoch,
-                best_val_loss=best_val_loss,
-                val_metrics=val,
+                model=model, optimiser=optimiser, scheduler=scheduler,
+                epoch=epoch, best_val_loss=best_val_loss, val_metrics=val,
             )
             print(f"  ✓ Saved best checkpoint  (val loss: {best_val_loss:.4f})")
             
@@ -348,16 +353,17 @@ def train(num_epochs: int = config.NUM_EPOCHS, batch_size: int = config.BATCH_SI
  
     return history
 
-def _save_checkpoint(path, model, optimiser, epoch, best_val_loss, val_metrics):
+def _save_checkpoint(path, model, optimiser, scheduler, epoch, best_val_loss, val_metrics):
     torch.save({
-        "epoch":           epoch,
-        "model_state":     model.state_dict(),
-        "optimiser_state": optimiser.state_dict(),
-        "best_val_loss":   best_val_loss,
-        "val_metrics":     val_metrics,
-        "num_classes":     config.NUM_CLASSES,
-        "ann_h":           config.ANN_H,
-        "ann_w":           config.ANN_W,
+        "epoch":            epoch,
+        "model_state":      model.state_dict(),
+        "optimiser_state":  optimiser.state_dict(),
+        "scheduler_state":  scheduler.state_dict(),
+        "best_val_loss":    best_val_loss,
+        "val_metrics":      val_metrics,
+        "num_classes":      config.NUM_CLASSES,
+        "ann_h":            config.ANN_H,
+        "ann_w":            config.ANN_W,
     }, path)
  
  
