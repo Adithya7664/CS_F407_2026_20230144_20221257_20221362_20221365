@@ -65,15 +65,38 @@ def load_midas(device: torch.device):
 
 # ── 2. Segmentation inference ─────────────────────────────────────────────────
 
+def _guided_filter(guide: np.ndarray, src: np.ndarray,
+                   r: int = 8, eps: float = 1e-4) -> np.ndarray:
+    """
+    Single-channel guided filter (He et al. 2013).
+    guide and src are (H, W) float32; output is same shape.
+    Uses the guide image's local structure to snap soft boundaries
+    onto actual image edges, preserving class probabilities elsewhere.
+    """
+    def box(img):
+        k = np.ones((2 * r + 1, 2 * r + 1), np.float32) / (2 * r + 1) ** 2
+        return cv2.filter2D(img, cv2.CV_32F, k)
+
+    mean_I  = box(guide)
+    mean_p  = box(src)
+    mean_Ip = box(guide * src)
+    mean_II = box(guide * guide)
+
+    a = (mean_Ip - mean_I * mean_p) / (mean_II - mean_I * mean_I + eps)
+    b = mean_p - a * mean_I
+
+    return box(a) * guide + box(b)
+
+
 def run_segmentation(model, image_800: np.ndarray,
                      device: torch.device) -> np.ndarray:
     """
     Run the trained SegNet on a single 800×600 RGB image with 4-way
     test-time augmentation (original, hflip, vflip, both flips).
 
-    Probabilities from each augmented view are un-flipped back to the
-    canonical orientation and averaged before argmax.  This typically
-    adds +2-4% mIoU at zero training cost.
+    Probabilities are bilinear-upsampled to 800×600 before argmax, then
+    each class channel is refined with a guided filter using the original
+    image's luminance so class boundaries snap to real image edges.
 
     Returns
     -------
@@ -106,8 +129,24 @@ def run_segmentation(model, image_800: np.ndarray,
             prob = prob.flip(dims=undo_dims)
         avg_prob = prob if avg_prob is None else avg_prob + prob
 
-    seg_ann = avg_prob.argmax(dim=1).squeeze(0).cpu().numpy().astype(np.int32)
-    seg_800 = geometry.upscale_seg_map(seg_ann)
+    # Bilinear upsample probability map to full resolution before argmax.
+    # This places boundaries at full-res precision rather than nearest-neighbour
+    # stretching a 256×256 decision map.
+    prob_800 = F.interpolate(
+        avg_prob,
+        size=(config.MAIN_H, config.MAIN_W),
+        mode='bilinear',
+        align_corners=False,
+    ).squeeze(0).cpu().numpy()                             # (C, 600, 800) float32
+
+    # Guided filter: snap each class-probability channel to image edges.
+    guide = cv2.cvtColor(image_800, cv2.COLOR_RGB2GRAY).astype(np.float32) / 255.0
+    prob_800 = np.stack(
+        [_guided_filter(guide, prob_800[c]) for c in range(prob_800.shape[0])],
+        axis=0,
+    )                                                      # (C, 600, 800)
+
+    seg_800 = prob_800.argmax(axis=0).astype(np.int32)    # (600, 800)
     return seg_800
 
 
